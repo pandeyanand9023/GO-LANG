@@ -1,42 +1,21 @@
-// Package classification Employee API.
-//
-// These are the services in the form of RESTful APIs in golang.
-// Here Swagger is used  to provide a detailed overview of the language specs
-//
-// Terms Of Service:
-//
-//     Schemes: http, https
-//     Host: localhost:8080
-//     Version: 1.0.0
-//     Contact: Anand Pandey<pandey_anand@optum.com>
-//
-//     Consumes:
-//     - application/json
-//
-//     Produces:
-//     - application/json
-//
-//     Security:
-//     - api_key:
-//
-//     SecurityDefinitions:
-//     api_key:
-//          type: apiKey
-//          name: KEY
-//          in: header
-//
-// swagger:met
 package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/gorilla/mux"
+)
+
+var (
+	outfile, _ = os.Create("testlogfile.log") // update path for your needs
+	l          = log.New(outfile, "", 0)
 )
 
 // Employee request model
@@ -90,9 +69,21 @@ type swaggReqNotFound struct {
 	}
 }
 
+func getSwag(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("hello")
+	w.Header().Set("Content-Type", "application/json")
+	file, err := os.Open("swaggerui/swagger.json") // For read access.
+	if err != nil {
+		log.Fatal(err)
+	}
+	io.Copy(w, file)
+}
+
 func getEmployees(w http.ResponseWriter, r *http.Request) {
+	l.Println("getEmployees is called")
 	w.Header().Set("Content-type", "application/json")
 	json.NewEncoder(w).Encode(employees)
+	l.Println(employees)
 }
 
 func deleteEmployee(w http.ResponseWriter, r *http.Request) {
@@ -149,101 +140,12 @@ func main() {
 	employees = append(employees, Employee{ID: "1", Isbn: "12345", Firstname: "Anand", Lastname: "Pandey"})
 	employees = append(employees, Employee{ID: "2", Isbn: "13245", Firstname: "Siddharth", Lastname: "Soni"})
 	r := mux.NewRouter()
-
-	// swagger:operation GET /employees employees getEmployees
-	// ---
-	// summary: Returns list of Employees
-	// description: Return the list of Employees.
-	// parameters:
-	// responses:
-	//   "200":
-	//     "$ref": "#/responses/employeeRes"
-	//   "400":
-	//     "$ref": "#/responses/badReq"
-	//   "404":
-	//     "$ref": "#/responses/notFoundReq"
 	r.HandleFunc("/employees", getEmployees).Methods("GET")
-
-	// swagger:operation GET /employees/{id} employees getEmployee
-	// ---
-	// summary: Return an Employee provided by the id.
-	// description: If the employee is found, employee will be returned else Error Not Found (404) will be returned.
-	// parameters:
-	// - name: id
-	//   in: path
-	//   description: id of the employee
-	//   type: string
-	//   required: true
-	// responses:
-	//   "200":
-	//     "$ref": "#/responses/employeeRes"
-	//   "400":
-	//     "$ref": "#/responses/badReq"
-	//   "404":
-	//     "$ref": "#/responses/notFoundReq"
 	r.HandleFunc("/employees/{id}", getEmployee).Methods("GET")
-
-	// swagger:operation POST /employees employees createEmployee
-	// ---
-	// summary: Creates a new employee.
-	// description: If employee creation is success, employee will be  returned with Created (201).
-	// parameters:
-	// - name: employee
-	//   description: employee to add to the list of accounts
-	//   in: body
-	//   required: true
-	//   schema:
-	//     "$ref": "#/definitions/Employee"
-	// responses:
-	//   "200":
-	//     "$ref": "#/responses/okResp"
-	//   "400":
-	//     "$ref": "#/responses/badReq"
 	r.HandleFunc("/employees", createEmployee).Methods("POST")
-
-	// swagger:operation PUT /employees/{id} employees updateEmployee
-	// ---
-	// summary: Updates a current employee.
-	// description: If employee updation is success, employee will be returned with  (201).
-	// parameters:
-	// - name: id
-	//   in: path
-	//   description: employee id
-	//   type: string
-	//   required: true
-	// - name: employee
-	//   description: Information of employee to add to the list of accounts
-	//   in: body
-	//   required: true
-	//   schema:
-	//     "$ref": "#/definitions/Employee"
-	// responses:
-	//   "200":
-	//     "$ref": "#/responses/okResp"
-	//   "400":
-	//     "$ref": "#/responses/badReq"
-	//   "404":
-	//     "$ref": "#/responses/notFoundReq"
 	r.HandleFunc("/employees", updateEmployee).Methods("PUT")
-
-	// swagger:operation DELETE /employees/{id} employees deleteEmployee
-	// ---
-	// summary: Deletes requested employee by employee id.
-	// description: Depending on the employee id, HTTP Status Not Found (404) or HTTP Status OK (200) may be returned.
-	// parameters:
-	// - name: id
-	//   in: path
-	//   description: employee id
-	//   type: string
-	//   required: true
-	// responses:
-	//   "200":
-	//     "$ref": "#/responses/okResp"
-	//   "400":
-	//     "$ref": "#/responses/badReq"
-	//   "404":
-	//     "$ref": "#/responses/notFoundReq"
 	r.HandleFunc("/employees/{id}", deleteEmployee).Methods("DELETE")
+	r.HandleFunc("/v2/api-docs", getSwag).Methods("GET")
 
 	fs := http.FileServer(http.Dir("./swaggerui"))
 	r.PathPrefix("/swaggerui/").Handler(http.StripPrefix("/swaggerui/", fs))
