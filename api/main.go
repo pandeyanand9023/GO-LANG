@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
+	eureka "github.com/xuanbo/eureka-client"
 )
 
 // Employee request model
@@ -82,6 +83,7 @@ func getEmployees(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-type", "application/json")
 
 	json.NewEncoder(w).Encode(employees)
+	log.Println(employees)
 }
 
 func deleteEmployee(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +98,7 @@ func deleteEmployee(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	json.NewEncoder(w).Encode(employees)
+	log.Println(employees)
 }
 
 func getEmployee(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +108,7 @@ func getEmployee(w http.ResponseWriter, r *http.Request) {
 		if item.ID == params["id"] {
 
 			json.NewEncoder(w).Encode(item)
+			log.Println(employees)
 			return
 
 		}
@@ -118,6 +122,7 @@ func createEmployee(w http.ResponseWriter, r *http.Request) {
 	employee.ID = strconv.Itoa(rand.Intn(100000000))
 	employees = append(employees, employee)
 	json.NewEncoder(w).Encode(employee)
+	log.Println(employees)
 }
 
 func updateEmployee(w http.ResponseWriter, r *http.Request) {
@@ -129,11 +134,37 @@ func updateEmployee(w http.ResponseWriter, r *http.Request) {
 		if item.ID == employee.ID {
 			employees[index] = employee
 			json.NewEncoder(w).Encode(employee)
+			log.Println(employees)
 			return
 		}
 	}
 }
 func main() {
+	log.SetFormatter(&log.JSONFormatter{
+		FieldMap: log.FieldMap{
+			log.FieldKeyTime: "@timestamp",
+			log.FieldKeyMsg:  "message",
+		},
+	})
+	log.SetLevel(log.TraceLevel)
+
+	file, err := os.OpenFile("out.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err == nil {
+		log.SetOutput(file)
+	}
+	defer file.Close()
+
+	client := eureka.NewClient(&eureka.Config{
+		DefaultZone:                  "http://127.0.0.1:8761/eureka/",
+		RenewalIntervalInSecs:        10,
+		RegistryFetchIntervalSeconds: 0,
+		DurationInSecs:               30,
+		App:                          "employee-service",
+		Port:                         8080,
+		Metadata:                     map[string]interface{}{"VERSION": "0.1.0", "NODE_GROUP_ID": 0, "PRODUCT_CODE": "DEFAULT", "PRODUCT_VERSION_CODE": "DEFAULT", "PRODUCT_ENV_CODE": "DEFAULT", "SERVICE_VERSION_CODE": "DEFAULT"},
+	})
+	// start client, register、heartbeat、refresh
+	client.Start()
 	employees = append(employees, Employee{ID: "1", Isbn: "12345", Firstname: "Anand", Lastname: "Pandey"})
 	employees = append(employees, Employee{ID: "2", Isbn: "13245", Firstname: "Siddharth", Lastname: "Soni"})
 
@@ -141,8 +172,6 @@ func main() {
 	metricsMiddleware := middleware.NewMetricsMiddleware()
 
 	r.Handle("/metrics", promhttp.Handler())
-	r.HandleFunc("/lemon", lemonHandler).Methods(http.MethodGet)
-	r.HandleFunc("/potato", potatoHandler).Methods(http.MethodPost)
 	r.HandleFunc("/employees", getEmployees).Methods("GET")
 	r.HandleFunc("/employees/{id}", getEmployee).Methods("GET")
 	r.HandleFunc("/employees", createEmployee).Methods("POST")
@@ -152,18 +181,7 @@ func main() {
 
 	fs := http.FileServer(http.Dir("./swaggerui"))
 	r.PathPrefix("/swaggerui/").Handler(http.StripPrefix("/swaggerui/", fs))
-
 	r.Use(metricsMiddleware.Metrics)
 	fmt.Println("Server has started on 8080: ")
 	log.Fatal(http.ListenAndServe(":8080", r))
-}
-
-func lemonHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	w.Write([]byte("Lemon"))
-}
-
-func potatoHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	w.Write([]byte("Potato"))
 }
